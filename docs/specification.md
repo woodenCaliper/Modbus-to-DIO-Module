@@ -227,14 +227,14 @@ PCツールにより、レジスタ番号を0始まりで入力するものと�
 
 | 用途 | レジスタ種別 | Function Code | アクセス | 備考 |
 | --- | --- | --- | --- | --- |
-| DI入力値、状態、DIP設定読出し | Input Register | `0x04` Read Input Registers | Read Only | 100Hz周期で更新される値を含む |
+| DI入力値、状態読出し | Input Register | `0x04` Read Input Registers | Read Only | 100Hz周期で更新される値を含む |
 | DO制御値の読出し | Holding Register | `0x03` Read Holding Registers | Read | 最後に受理された制御値を返す |
 | DO制御値の単一書込み | Holding Register | `0x06` Write Single Register | Write | 1ch単位の制御に使用する |
 | DO制御値の複数書込み | Holding Register | `0x10` Write Multiple Registers | Write | 複数chの同期点滅設定に使用する |
 
 ### 4.4 Input Registerマップ
 
-Input Registerは、入力計測値、システム時刻、DIPスイッチ設定、および出力実状態を読み出すために使用する。
+Input Registerは、入力計測値、システム時刻、出力実状態、および入力オーバーレンジ状態を読み出すために使用する。
 全Input Registerは読み取り専用とする。
 
 #### 4.4.1 Input Register一覧
@@ -259,10 +259,8 @@ Input Registerは、入力計測値、システム時刻、DIPスイッチ設定
 | `0x000F` | 15 | 30016 | `DI15_PERCENT` | DI15入力値 | `0`～`1000` = 0.0%～100.0% | 100Hz |
 | `0x0010` | 16 | 30017 | `SYSTEM_TIME_HIGH` | 起動後時刻カウンタ上位16bit | 32bit unsigned上位ワード | 100Hz |
 | `0x0011` | 17 | 30018 | `SYSTEM_TIME_LOW` | 起動後時刻カウンタ下位16bit | 32bit unsigned下位ワード | 100Hz |
-| `0x0020` | 32 | 30033 | `DI_BANK_RANGE` | DI入力基準電圧DIP設定 | 2bit × 4バンク | DIP読取り反映時 |
-| `0x0021` | 33 | 30034 | `DO_BANK_MODE` | DO出力モードDIP設定 | 3bit × 4バンク | DIP読取り反映時 |
-| `0x0022` | 34 | 30035 | `DO_OUTPUT_STATE` | DO実出力状態ビットマスク | bit0～15 = DO0～DO15 | 100Hz / 即時反映後 |
-| `0x0023` | 35 | 30036 | `DI_OVERRANGE_FLAGS` | DIオーバーレンジ状態ビットマスク | bit0～15 = DI0～DI15 | 100Hz |
+| `0x0020` | 32 | 30033 | `DO_OUTPUT_STATE` | DO実出力状態ビットマスク | bit0～15 = DO0～DO15 | 100Hz / 即時反映後 |
+| `0x0021` | 33 | 30034 | `DI_OVERRANGE_FLAGS` | DIオーバーレンジ状態ビットマスク | bit0～15 = DI0～DI15 | 100Hz |
 
 未定義のInput Registerアドレスは予約領域とし、読み出し要求に対してはModbus例外応答 `0x02` Illegal Data Addressを返す。
 
@@ -287,51 +285,7 @@ SystemTimeCounter = (SYSTEM_TIME_HIGH << 16) | SYSTEM_TIME_LOW
 `SYSTEM_TIME_HIGH` と `SYSTEM_TIME_LOW` を同一のRead Input Registers要求で読み出した場合、同一タイミングのスナップショット値を返す。
 個別に読み出した場合は、2回の読出し間でカウンタが更新される可能性がある。
 
-#### 4.4.4 DI_BANK_RANGEビット定義
-
-`DI_BANK_RANGE` は、入力バンクごとのDIPスイッチ設定を2bit単位で格納する。
-
-| bit範囲 | 対象バンク | 対象チャンネル |
-| --- | --- | --- |
-| bit1～0 | Input Bank 0 | DI0～DI3 |
-| bit3～2 | Input Bank 1 | DI4～DI7 |
-| bit5～4 | Input Bank 2 | DI8～DI11 |
-| bit7～6 | Input Bank 3 | DI12～DI15 |
-| bit15～8 | 予約 | 常に0 |
-
-各2bit値の意味は以下とする。
-
-| 値 | 入力基準電圧 |
-| --- | --- |
-| `0` | 3.3V |
-| `1` | 5V |
-| `2` | 12V |
-| `3` | 24V |
-
-#### 4.4.5 DO_BANK_MODEビット定義
-
-`DO_BANK_MODE` は、出力バンクごとのDIPスイッチ設定を3bit単位で格納する。
-
-| bit範囲 | 対象バンク | 対象チャンネル |
-| --- | --- | --- |
-| bit2～0 | Output Bank 0 | DO0～DO3 |
-| bit5～3 | Output Bank 1 | DO4～DO7 |
-| bit8～6 | Output Bank 2 | DO8～DO11 |
-| bit11～9 | Output Bank 3 | DO12～DO15 |
-| bit15～12 | 予約 | 常に0 |
-
-各3bit値の意味は以下とする。
-
-| 値 | 出力モード |
-| --- | --- |
-| `0` | 3.3V出力モード |
-| `1` | 5V出力モード |
-| `2` | 12V出力モード |
-| `3` | 24V出力モード |
-| `4` | リレー接点モード |
-| `5`～`7` | 予約 |
-
-#### 4.4.6 DO_OUTPUT_STATEビット定義
+#### 4.4.4 DO_OUTPUT_STATEビット定義
 
 `DO_OUTPUT_STATE` は、各DOの実出力状態をbit単位で表す。
 
@@ -345,7 +299,7 @@ SystemTimeCounter = (SYSTEM_TIME_HIGH << 16) | SYSTEM_TIME_LOW
 電圧出力モードでは、値`1`は選択電圧出力、値`0`はLow相当を示す。
 リレー接点モードでは、値`1`は短絡相当、値`0`は開放相当を示す。
 
-#### 4.4.7 DI_OVERRANGE_FLAGSビット定義
+#### 4.4.5 DI_OVERRANGE_FLAGSビット定義
 
 `DI_OVERRANGE_FLAGS` は、各DIの入力電圧が設定基準電圧を超えて飽和しているかをbit単位で表す。
 
